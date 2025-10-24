@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Status Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 20px;
+        }
+        .device-card {
+            transition: transform 0.2s;
+        }
+        .device-card:hover {
+            transform: translateY(-5px);
+        }
+        .online {
+            border-left: 5px solid #28a745;
+        }
+        .offline {
+            border-left: 5px solid #dc3545;
+        }
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .online-dot {
+            background-color: #28a745;
+        }
+        .offline-dot {
+            background-color: #dc3545;
+        }
+        .header {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .refresh-btn {
+            background-color: #6c5ce7;
+            border: none;
+            color: white;
+        }
+        .refresh-btn:hover {
+            background-color: #5d4de0;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header text-center">
+            <h1><i class="fas fa-microchip"></i> Raspberry Pi Status Dashboard</h1>
+            <p class="lead">Monitor the status of your Raspberry Pi devices in real-time</p>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-info-circle"></i> System Information</h5>
+                        <ul class="list-unstyled">
+                            <li><strong>Total Devices:</strong> <span id="total-devices">0</span></li>
+                            <li><strong>Online Devices:</strong> <span id="online-devices">0</span></li>
+                            <li><strong>Offline Devices:</strong> <span id="offline-devices">0</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-sync-alt"></i> Refresh Settings</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                            <label class="form-check-label" for="autoRefresh">Auto-refresh every 5 seconds</label>
+                        </div>
+                        <button id="manualRefresh" class="btn refresh-btn mt-2">
+                            <i class="fas fa-redo"></i> Manual Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2><i class="fas fa-list"></i> Device Status</h2>
+                    <div class="form-inline">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search devices...">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="devices-container" class="row">
+            <!-- Device cards will be populated here -->
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading device data...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let refreshInterval;
+
+        // Function to calculate time ago
+        function timeAgo(date) {
+            const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+            
+            let interval = seconds / 31536000;
+            if (interval > 1) {
+                return Math.floor(interval) + " years ago";
+            }
+            
+            interval = seconds / 2592000;
+            if (interval > 1) {
+                return Math.floor(interval) + " months ago";
+            }
+            
+            interval = seconds / 86400;
+            if (interval > 1) {
+                return Math.floor(interval) + " days ago";
+            }
+            
+            interval = seconds / 3600;
+            if (interval > 1) {
+                return Math.floor(interval) + " hours ago";
+            }
+            
+            interval = seconds / 60;
+            if (interval > 1) {
+                return Math.floor(interval) + " minutes ago";
+            }
+            
+            return Math.floor(seconds) + " seconds ago";
+        }
+
+        // Function to get signal strength indicator
+        function getSignalIndicator(strength) {
+            if (strength === 'Excellent') {
+                return '<i class="fas fa-signal" style="color: #28a745;"></i>';
+            } else if (strength === 'Good') {
+                return '<i class="fas fa-signal" style="color: #ffc107;"></i>';
+            } else if (strength === 'Fair') {
+                return '<i class="fas fa-signal" style="color: #fd7e14;"></i>';
+            } else if (strength === 'Poor') {
+                return '<i class="fas fa-signal" style="color: #dc3545;"></i>';
+            } else {
+                return '<i class="fas fa-question-circle"></i>';
+            }
+        }
+
+        // Function to load devices data
+        function loadDevices() {
+            $.ajax({
+                url: '/api/devices',
+                method: 'GET',
+                success: function(data) {
+                    displayDevices(data);
+                },
+                error: function() {
+                    $('#devices-container').html(`
+                        <div class="col-12">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i> Error loading device data. Please try again.
+                            </div>
+                        </div>
+                    `);
+                }
+            });
+        }
+
+        // Function to display devices
+        function displayDevices(devices) {
+            const container = $('#devices-container');
+            
+            // Stats counters
+            let totalDevices = 0;
+            let onlineDevices = 0;
+            let offlineDevices = 0;
+            
+            // Filter devices based on search
+            const searchTerm = $('#searchInput').val().toLowerCase();
+            const filteredDevices = {};
+            
+            Object.keys(devices).forEach(key => {
+                const device = devices[key];
+                if (
+                    device.device_id.toLowerCase().includes(searchTerm) ||
+                    device.ip_address.toLowerCase().includes(searchTerm)
+                ) {
+                    filteredDevices[key] = device;
+                }
+            });
+            
+            if (Object.keys(filteredDevices).length === 0) {
+                container.html(`
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No devices found matching your search criteria.
+                        </div>
+                    </div>
+                `);
+                $('#total-devices').text('0');
+                $('#online-devices').text('0');
+                $('#offline-devices').text('0');
+                return;
+            }
+            
+            let html = '';
+            
+            Object.keys(filteredDevices).forEach(key => {
+                const device = filteredDevices[key];
+                totalDevices++;
+                
+                if (device.status === 'online') {
+                    onlineDevices++;
+                } else {
+                    offlineDevices++;
+                }
+                
+                const timeAgoStr = timeAgo(device.last_seen);
+                const signalIcon = getSignalIndicator(device.signal_strength);
+                
+                html += `
+                    <div class="col-lg-6 col-xl-4 mb-4">
+                        <div class="card device-card ${device.status}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h5 class="card-title">
+                                        <span class="status-indicator ${device.status}-dot"></span>
+                                        ${device.device_id}
+                                    </h5>
+                                    <span class="badge ${device.status === 'online' ? 'bg-success' : 'bg-danger'}">
+                                        ${device.status === 'online' ? 'ONLINE' : 'OFFLINE'}
+                                    </span>
+                                </div>
+                                
+                                <p class="card-text">
+                                    <i class="fas fa-network-wired"></i> IP: ${device.ip_address}<br>
+                                    <i class="far fa-clock"></i> Last seen: ${timeAgoStr}<br>
+                                    <i class="fas fa-wifi"></i> Signal: ${signalIcon} ${device.signal_strength}
+                                </p>
+                                
+                                <div class="progress mt-2">
+                                    <div class="progress-bar ${device.status === 'online' ? 'bg-success' : 'bg-danger'}" 
+                                         role="progressbar" style="width: 100%" aria-valuenow="100" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        ${device.status.charAt(0).toUpperCase() + device.status.slice(1)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.html(html);
+            
+            // Update stats
+            $('#total-devices').text(totalDevices);
+            $('#online-devices').text(onlineDevices);
+            $('#offline-devices').text(offlineDevices);
+        }
+
+        // Initial load
+        $(document).ready(function() {
+            loadDevices();
+            
+            // Set up auto-refresh
+            refreshInterval = setInterval(loadDevices, 5000);
+            
+            // Manual refresh
+            $('#manualRefresh').click(function() {
+                loadDevices();
+            });
+            
+            // Toggle auto-refresh
+            $('#autoRefresh').change(function() {
+                if (this.checked) {
+                    refreshInterval = setInterval(loadDevices, 5000);
+                } else {
+                    clearInterval(refreshInterval);
+                }
+            });
+            
+            // Search functionality
+            $('#searchInput').on('keyup', function() {
+                loadDevices();
+            });
+        });
+    </script>
+</body>
+</html>
