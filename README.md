@@ -133,7 +133,13 @@ Feel free to fork this project and submit pull requests for improvements. Some i
 This project is open source and available under the MIT License.
 
 
+ http://192.168.29.111:5000
+
+
+ python pi_client.py --server http://192.168.1.100:5000/api/heartbeat
+
 
 
 @reboot python3 /home/pi/heartbeat.py &
 #
+
