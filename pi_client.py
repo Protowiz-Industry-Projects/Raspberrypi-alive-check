@@ -9,16 +9,16 @@ import time
 import socket
 import argparse
 import uuid
-import psutil
 
 # Default server URL - change this to your server's IP and port
-DEFAULT_SERVER_URL = "http://localhost:5000/api/heartbeat"
+DEFAULT_SERVER_URL = "http://127.0.0.1:5000/api/heartbeat"
 
 def get_local_ip():
     """Get the local IP address of this device."""
     try:
         # Connect to a remote server to determine local IP
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Using Google's public DNS server to determine local IP
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
@@ -29,6 +29,19 @@ def get_local_ip():
             return socket.gethostbyname(socket.gethostname())
         except Exception:
             return "127.0.0.1"
+
+def get_server_ip():
+    """Attempt to automatically detect the server IP address.
+    This implementation assumes the server is running on the same network."""
+    local_ip = get_local_ip()
+    
+    # If we're on localhost, assume server is also on localhost
+    if local_ip.startswith("127.") or local_ip == "localhost":
+        return "127.0.0.1"
+    
+    # For devices on the same network, we could implement network scanning
+    # For now, we'll just return the default
+    return None
 
 def get_signal_strength():
     """Simulate getting signal strength. In a real implementation, this would
