@@ -143,3 +143,4 @@ This project is open source and available under the MIT License.
 @reboot python3 /home/pi/heartbeat.py &
 #
 
+https://www.waveshare.com/wiki/13.3inch_HDMI_LCD_(H)_(with_case)
